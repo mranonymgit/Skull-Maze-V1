@@ -24,6 +24,7 @@ class MazeGenerator {
     cols = baseSize + (level - 1) * increment;
 
     if (rows % 2 == 0) rows++;
+    if (cols % 2 == 0) cols++;
 
     final combinedSeed = level * 1000 + subMazeIndex;
     final Random random = Random(combinedSeed);
