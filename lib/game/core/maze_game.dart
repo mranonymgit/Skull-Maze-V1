@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:async'; // Para StreamSubscription
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
@@ -7,6 +8,7 @@ import 'package:flame/experimental.dart';
 import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sensors_plus/sensors_plus.dart'; // Acelerómetro
 
 import '../../models/game_config.dart';
 import '../components/player.dart';
@@ -29,6 +31,10 @@ with HasCollisionDetection, KeyboardEvents {
   static const double wallSize = 24.0; 
   
   List<List<bool>>? _collisionMap;
+  
+  // Acelerómetro
+  StreamSubscription<AccelerometerEvent>? _accelSubscription;
+  Vector2 _tiltDirection = Vector2.zero();
 
   @override
   Color backgroundColor() => const Color(0xFF000000);
@@ -44,12 +50,36 @@ with HasCollisionDetection, KeyboardEvents {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    // Iniciamos escucha de acelerómetro si está disponible
+    if (config.isAccelerometerAvailable) {
+      _accelSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
+        // Convertimos inclinación a dirección (-1 a 1)
+        // Ejes: X móvil = X juego (invertido a veces), Y móvil = Y juego
+        // Ajustar sensibilidad dividiendo por un factor (ej. 5.0)
+        final double sensitivity = 2.0;
+        // x negativo es izquierda, positivo derecha
+        // y negativo es arriba (top), positivo abajo
+        double x = -event.x / sensitivity; 
+        double y = event.y / sensitivity; // Depende de la orientación portrait/landscape
+        
+        // Si es Landscape (que suele ser el caso en juegos):
+        // x del acelerómetro es el eje corto, y el largo.
+        // Mejor dejarlo simple: en portrait, x es izquierda/derecha.
+        // Ajuste básico:
+        _tiltDirection = Vector2(x, y);
+      });
+    }
+  }
+  
+  @override
+  void onRemove() {
+    _accelSubscription?.cancel();
+    super.onRemove();
   }
 
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
-    // Es vital llamar al ajuste de cámara cada vez que el tamaño del juego cambia
     _updateCameraZoom(size);
   }
 
@@ -88,12 +118,10 @@ with HasCollisionDetection, KeyboardEvents {
     player = Player(position: Vector2(startX, startY), size: Vector2.all(wallSize * 0.5));
     add(player);
 
-    // Definimos los límites del mundo, aunque con el zoom fit no deberían alcanzarse
     camera.setBounds(Rectangle.fromRect(
       Rect.fromLTWH(0, 0, _mazeCols * wallSize, _mazeRows * wallSize)
     ));
     
-    // Ajuste inicial de la cámara
     _updateCameraZoom(canvasSize);
 
     _updateControls();
@@ -129,42 +157,31 @@ with HasCollisionDetection, KeyboardEvents {
      overlays.remove('LevelCompleteMenu');
   }
 
-  // === SOLUCIÓN DEFINITIVA DE AJUSTE DE CÁMARA (LETTERBOXING) ===
   void _updateCameraZoom(Vector2 screenSize) {
     if (_mazeCols == 0 || _mazeRows == 0) return;
     
-    // Dimensiones reales del laberinto en el mundo
     final double mapWidth = _mazeCols * wallSize;
     final double mapHeight = _mazeRows * wallSize;
-    
-    // Calculamos el factor de escala para ancho y alto
     final double scaleX = screenSize.x / mapWidth;
     final double scaleY = screenSize.y / mapHeight;
     
-    // MARGEN DE SEGURIDAD AGRESIVO
-    // Usamos 0.9 (90%) para asegurar que siempre haya un borde negro visible alrededor.
-    // Esto garantiza que NUNCA se corte, ni por arriba/abajo ni por los lados.
-    const double marginFactor = 0.9;
+    bool isMobile = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+    double marginFactor = isMobile ? 0.90 : 0.95;
 
-    // "min" elige la escala más restrictiva. Si es muy ancho, limita por altura. Si es muy alto, limita por ancho.
     double zoomFit = min(scaleX, scaleY) * marginFactor; 
 
-    // Aplicamos el zoom
     camera.viewfinder.zoom = zoomFit;
-    
-    // ANCLAJE CENTRAL PERFECTO
     camera.viewfinder.anchor = Anchor.center;
     
-    // POSICIÓN EXACTA DEL CENTRO DEL LABERINTO
     final centerX = mapWidth / 2;
     final centerY = mapHeight / 2;
     camera.viewfinder.position = Vector2(centerX, centerY);
     
-    // Detener cualquier movimiento automático o inercia
     camera.stop();
   }
 
   void _updateControls() {
+    // Si es Touch, mostramos botones. Si es acelerómetro, los ocultamos.
     if (config.activeControl == ControlType.touchButtons && touchControls == null) {
       touchControls = TouchControlButtons(player);
       camera.viewport.add(touchControls!);
@@ -179,6 +196,16 @@ with HasCollisionDetection, KeyboardEvents {
     super.update(dt);
     config.updateTime(dt);
     _updateControls();
+    
+    // Acelerómetro Input
+    if (config.activeControl == ControlType.accelerometer) {
+      // Zona muerta para estabilidad
+      if (_tiltDirection.length > 0.2) {
+        player.move(_tiltDirection);
+      } else {
+        player.move(Vector2.zero());
+      }
+    }
   }
 
   @override

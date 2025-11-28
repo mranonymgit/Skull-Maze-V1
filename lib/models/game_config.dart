@@ -2,82 +2,117 @@ import 'package:flutter/foundation.dart';
 
 // Tipos de control soportados
 enum ControlType {
-  keyboard,      // PC/Laptop, Web Desktop
-  accelerometer, // Móvil (Opcional)
-  touchButtons,  // Móvil, Web Móvil
-  gamepad        // Consolas/Otros
+  keyboard,
+  accelerometer,
+  touchButtons,
+  gamepad
 }
 
-// Clase para almacenar la configuración y el estado de la UI
+// === MODELO (M) ===
+// Almacena TODOS los datos y el estado de la aplicación.
 class GameConfig extends ChangeNotifier {
-  ControlType _activeControl = ControlType.keyboard; // Default temporal
+  // -- Estado del Juego --
+  ControlType _activeControl = ControlType.keyboard; 
   int _currentLevel = 1;
   int _currentSubMaze = 1;
-  int _maxSubMazes = 2; // Nivel 1 tiene 2
-  double _timeRemaining = 60.0; // 60 segundos por defecto
+  int _maxSubMazes = 2; 
+  double _timeRemaining = 60.0;
+  bool _isPaused = false; // Nuevo: Estado de pausa en el modelo
+
+  // -- Configuración de Usuario (NUEVO) --
+  double _volume = 0.8;
+  bool _notifications = true;
+  bool _vibration = true;
+
+  // Flag de hardware
+  bool _hasAccelerometer = false;
 
   GameConfig() {
     _detectPlatformControl();
   }
 
+  // Getters
   ControlType get activeControl => _activeControl;
   int get currentLevel => _currentLevel;
   int get currentSubMaze => _currentSubMaze;
   int get maxSubMazes => _maxSubMazes;
   double get timeRemaining => _timeRemaining;
+  bool get isAccelerometerAvailable => _hasAccelerometer;
+  bool get isPaused => _isPaused;
+  
+  // Getters Configuración
+  double get volume => _volume;
+  bool get notifications => _notifications;
+  bool get vibration => _vibration;
 
-  // Detectar la plataforma y asignar el control por defecto
+  // -- Lógica de Datos --
+
   void _detectPlatformControl() {
     if (kIsWeb) {
-      // En Web, verificamos si es un navegador móvil por la plataforma target
-      // defaultTargetPlatform en web devuelve la plataforma del SO subyacente si es posible,
-      // o TargetPlatform.android / .iOS si se está simulando o accediendo desde móvil.
       if (defaultTargetPlatform == TargetPlatform.android || 
           defaultTargetPlatform == TargetPlatform.iOS) {
         _activeControl = ControlType.touchButtons;
+        _hasAccelerometer = false; 
       } else {
         _activeControl = ControlType.keyboard;
+        _hasAccelerometer = false;
       }
     } else {
-      // Apps nativas
       if (defaultTargetPlatform == TargetPlatform.android || 
           defaultTargetPlatform == TargetPlatform.iOS) {
         _activeControl = ControlType.touchButtons;
+        _hasAccelerometer = true;
       } else {
-        // Windows, Mac, Linux, Fuchsia
         _activeControl = ControlType.keyboard;
+        _hasAccelerometer = false;
       }
     }
-    // print('🐛 Debug: Plataforma detectada: $defaultTargetPlatform, Web: $kIsWeb -> Control inicial: $_activeControl'); // Print eliminado
   }
 
-  // Método para actualizar el control activo manualmente
+  // Setters que notifican a la Vista (Provider)
   void setActiveControl(ControlType newControl) {
     if (_activeControl != newControl) {
       _activeControl = newControl;
-      // Requisito: Debug de Control de Entrada
-      // print('🐛 Debug: Control de Entrada Activo: $_activeControl'); // Print eliminado
       notifyListeners();
     }
   }
 
-  // Método para el temporizador
-  void updateTime(double dt) {
-    _timeRemaining -= dt;
-    if (_timeRemaining < 0) _timeRemaining = 0;
+  void setPaused(bool paused) {
+    _isPaused = paused;
     notifyListeners();
   }
 
-  // Lógica para avanzar de laberinto/nivel (simplificada)
+  void setVolume(double value) {
+    _volume = value;
+    notifyListeners();
+  }
+
+  void setNotifications(bool value) {
+    _notifications = value;
+    notifyListeners();
+  }
+
+  void setVibration(bool value) {
+    _vibration = value;
+    notifyListeners();
+  }
+
+  void updateTime(double dt) {
+    if (!_isPaused) { // El modelo controla si el tiempo corre
+      _timeRemaining -= dt;
+      if (_timeRemaining < 0) _timeRemaining = 0;
+      // notifyListeners(); // Opcional: optimización para no redibujar todo a 60fps solo por el timer
+    }
+  }
+
   void advanceMaze() {
     _currentSubMaze++;
-    // Lógica para el siguiente nivel o laberinto
     if (_currentSubMaze > _maxSubMazes) {
       _currentLevel++;
       _currentSubMaze = 1;
       _maxSubMazes = (_currentLevel == 1) ? 2 : 3;
     }
-    _timeRemaining = 60.0; // Resetear tiempo
+    _timeRemaining = 60.0; 
     notifyListeners();
   }
 }

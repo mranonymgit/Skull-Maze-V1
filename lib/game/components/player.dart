@@ -32,8 +32,9 @@ class Player extends CircleComponent
     super.onLoad();
     paint = Paint()..color = const Color(0xFF18FFFF); 
     
+    // MEJORA: Hitbox un poco más grande (95%) para evitar que el sprite visual corte esquinas
     add(CircleHitbox(
-      radius: size.x / 2 * 0.9, 
+      radius: size.x / 2 * 0.95, 
       anchor: Anchor.center,
       position: size / 2,
       collisionType: CollisionType.active,
@@ -57,45 +58,45 @@ class Player extends CircleComponent
     direction = dir;
   }
 
-  // OPTIMIZACIÓN O(1): Solo verificamos paredes vecinas
+  // OPTIMIZACIÓN O(1) + RESOLUCIÓN MULTI-PASADA (Anti-Tunneling)
   void _moveWithCollisions(Vector2 delta) {
-    Vector2 newPosition = position + delta;
-    bool collided = false;
+    // Posición propuesta inicial
+    Vector2 currentPos = position + delta;
+    
+    // BUCLE DE RESOLUCIÓN ITERATIVA
+    // Realizamos varias pasadas (3) para resolver conflictos complejos (ej. esquinas internas)
+    // Si resolvemos pared A y nos empuja contra pared B, la siguiente pasada resolverá pared B.
+    for (int i = 0; i < 3; i++) {
+      bool collisionFound = false;
 
-    // Calculamos en qué celda está el jugador
-    int gridCol = (position.x / MazeGame.wallSize).floor();
-    int gridRow = (position.y / MazeGame.wallSize).floor();
+      // Calculamos celda actual basada en la posición corregida de esta iteración
+      int gridCol = (currentPos.x / MazeGame.wallSize).floor();
+      int gridRow = (currentPos.y / MazeGame.wallSize).floor();
 
-    // Revisamos solo el área 3x3 alrededor del jugador
-    // Esto reduce las comprobaciones de 2000+ a solo 9 por frame.
-    for (int r = gridRow - 1; r <= gridRow + 1; r++) {
-      for (int c = gridCol - 1; c <= gridCol + 1; c++) {
-        
-        // Consulta ultra-rápida al mapa booleano
-        if (game.isWallAt(r, c)) {
-          // Construimos la geometría de la pared al vuelo
-          double wx = c * MazeGame.wallSize;
-          double wy = r * MazeGame.wallSize;
-          double wSize = MazeGame.wallSize;
+      // Revisamos vecinos 3x3
+      for (int r = gridRow - 1; r <= gridRow + 1; r++) {
+        for (int c = gridCol - 1; c <= gridCol + 1; c++) {
           
-          // Usamos una versión simplificada de _willCollide que acepta coordenadas
-          if (_willCollideWithRect(newPosition, wx, wy, wSize, wSize)) {
-            collided = true;
-            Vector2 correction = _resolveCollisionWithRect(newPosition, wx, wy, wSize, wSize);
-            position = correction;
-            // Si corregimos una colisión, salimos del bucle interno para evitar conflictos
-            // o podríamos intentar resolver múltiples, pero break es seguro.
-            gotoEnd: break; 
+          if (game.isWallAt(r, c)) {
+            double wx = c * MazeGame.wallSize;
+            double wy = r * MazeGame.wallSize;
+            double wSize = MazeGame.wallSize;
+            
+            if (_willCollideWithRect(currentPos, wx, wy, wSize, wSize)) {
+              // Resolvemos y actualizamos currentPos inmediatamente para la siguiente verificación
+              currentPos = _resolveCollisionWithRect(currentPos, wx, wy, wSize, wSize);
+              collisionFound = true;
+            }
           }
         }
       }
-      if (collided) break;
+      
+      // Si en una pasada no hubo colisiones, terminamos antes (optimización)
+      if (!collisionFound) break;
     }
 
-    if (!collided) {
-      position = newPosition;
-    }
-    
+    // Aplicamos la posición final libre de colisiones
+    position = currentPos;
     _previousPosition = position.clone();
   }
 
@@ -122,13 +123,12 @@ class Player extends CircleComponent
     setDirection(newDirection);
   }
   
-  // Versión optimizada que no requiere objeto WallComponent
   Vector2 _resolveCollisionWithRect(Vector2 newPosition, double wx, double wy, double wWidth, double wHeight) {
     double wallLeft = wx;
     double wallRight = wx + wWidth;
     double wallTop = wy;
     double wallBottom = wy + wHeight;
-    double playerRadius = size.x / 2;
+    double playerRadius = size.x / 2 * 0.95; // Usar el mismo radio ajustado
 
     double closestX = newPosition.x.clamp(wallLeft, wallRight);
     double closestY = newPosition.y.clamp(wallTop, wallBottom);
@@ -158,7 +158,7 @@ class Player extends CircleComponent
     double wallRight = wx + wWidth;
     double wallTop = wy;
     double wallBottom = wy + wHeight;
-    double playerRadius = size.x / 2;
+    double playerRadius = size.x / 2 * 0.95; // Radio consistente
 
     double closestX = newPosition.x.clamp(wallLeft, wallRight);
     double closestY = newPosition.y.clamp(wallTop, wallBottom);
