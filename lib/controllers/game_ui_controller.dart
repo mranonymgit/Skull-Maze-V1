@@ -24,8 +24,6 @@ class GameUIController {
   // Acción: Cambiar Volumen
   void updateVolume(double value) {
     config.setVolume(value);
-    // Aquí podrías llamar a un AudioService para ajustar el volumen real
-    // AudioService.setVolume(value);
   }
 
   // Acción: Cambiar Notificaciones
@@ -45,10 +43,51 @@ class GameUIController {
     );
   }
 
-  // Acción: Salir
-  void exitToMenu(BuildContext context) {
-    // Lógica de limpieza o guardado antes de salir
-    // Navigator.of(context).pop(); // O pushReplacement hacia el menú
-    print("Saliendo al menú...");
+  // Acción: Salir con Confirmación (Usado desde el menú de pausa)
+  Future<void> exitToMenuWithConfirmation(BuildContext context) async {
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2C2C2C),
+          title: const Text(
+            '¿Salir al Menú?', 
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+          ),
+          content: const Text(
+            'Perderás el progreso del nivel actual.',
+            style: TextStyle(color: Colors.white70)
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+              child: const Text('Salir'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      _performExit(context);
+    }
+  }
+
+  // Acción: Salir Directo (Usado al completar nivel)
+  void exitToMenuDirect(BuildContext context) {
+    _performExit(context);
+  }
+
+  // Lógica interna de salida
+  void _performExit(BuildContext context) {
+    // Aquí iría la lógica real de navegación, ej: Navigator.of(context).pushReplacementNamed('/');
+    // Por ahora solo imprimimos y cerramos diálogos si los hubiera
+    print("Saliendo al menú principal...");
+    // Navigator.of(context).popUntil((route) => route.isFirst); // Ejemplo
   }
 }

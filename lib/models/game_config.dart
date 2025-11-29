@@ -98,10 +98,10 @@ class GameConfig extends ChangeNotifier {
   }
 
   void updateTime(double dt) {
-    if (!_isPaused) { // El modelo controla si el tiempo corre
+    if (!_isPaused) { 
       _timeRemaining -= dt;
       if (_timeRemaining < 0) _timeRemaining = 0;
-      // notifyListeners(); // Opcional: optimización para no redibujar todo a 60fps solo por el timer
+      notifyListeners(); // Descomentado para actualizar la UI en tiempo real
     }
   }
 

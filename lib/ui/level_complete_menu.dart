@@ -80,7 +80,6 @@ class _LevelCompleteMenuState extends State<LevelCompleteMenu> with SingleTicker
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Animación de salida inversa antes de ejecutar la acción (opcional, pero inmediato es más fluido)
                     widget.game.nextLevel();
                   },
                   style: ElevatedButton.styleFrom(
@@ -94,7 +93,7 @@ class _LevelCompleteMenuState extends State<LevelCompleteMenu> with SingleTicker
               ),
               const SizedBox(height: 15),
               
-              // Botón Volver
+              // Botón Volver (Sin confirmación, directo)
               TextButton(
                 onPressed: () => widget.game.goToMainMenu(),
                 style: TextButton.styleFrom(foregroundColor: Colors.white70),

@@ -6,23 +6,39 @@ class Maze {
   final int cols;
   final int seed;
   final List<List<bool>> walls; // true = Pared, false = Camino
+  
+  // Nuevos campos para posiciones dinámicas
+  final int startRow;
+  final int startCol;
+  final int goalRow;
+  final int goalCol;
 
-  Maze(this.rows, this.cols, this.seed, this.walls);
+  Maze(this.rows, this.cols, this.seed, this.walls, this.startRow, this.startCol, this.goalRow, this.goalCol);
 }
 
 class MazeGenerator {
   static Maze generate(int level, int subMazeIndex) {
     int rows, cols;
     
-    // 1. Definición de tamaño
-    // RESTAURADO: Tamaño grande (45) para que las paredes se vean pequeñas y detalladas.
-    // Gracias a la optimización de renderizado, esto ya no causa lag.
-    int baseSize = 15;
-    int increment = 5;
+    // 1. LÓGICA DE TAMAÑO Y DIFICULTAD POR NIVELES
+    if (level < 5) {
+      // Niveles 1-4: Crecimiento progresivo normal (15 -> 30)
+      int baseSize = 15;
+      int increment = 5;
+      rows = baseSize + (level - 1) * increment;
+      cols = baseSize + (level - 1) * increment;
+    } else if (level < 10) {
+      // Niveles 5-9: Tamaño fijo a 31
+      rows = 31;
+      cols = 31;
+    } else {
+      // Nivel 10+: Aumento masivo de tamaño (61+)
+      // Al tener muchas más celdas, el zoom "Fit" hará que todo se vea más pequeño.
+      rows = 61 + (level - 10) * 10;
+      cols = 61 + (level - 10) * 10;
+    }
 
-    rows = baseSize + (level - 1) * increment;
-    cols = baseSize + (level - 1) * increment;
-
+    // Asegurar impares
     if (rows % 2 == 0) rows++;
     if (cols % 2 == 0) cols++;
 
@@ -31,6 +47,7 @@ class MazeGenerator {
 
     final List<List<bool>> grid = List.generate(rows, (_) => List.filled(cols, true));
 
+    // Algoritmo Recursive Backtracker
     void recursiveBacktracker(int r, int c) {
       grid[r][c] = false;
 
@@ -53,6 +70,7 @@ class MazeGenerator {
       }
     }
 
+    // Generamos estructura base
     recursiveBacktracker(1, 1);
     
     // Braiding (bucles)
@@ -67,28 +85,50 @@ class MazeGenerator {
 
     // REFUERZO DE MUROS PERIMETRALES
     for (int c = 0; c < cols; c++) {
-      grid[0][c] = true;          
-      grid[rows - 1][c] = true;   
+      grid[0][c] = true; grid[rows - 1][c] = true;   
     }
     for (int r = 0; r < rows; r++) {
-      grid[r][0] = true;          
-      grid[r][cols - 1] = true;   
+      grid[r][0] = true; grid[r][cols - 1] = true;   
     }
 
-    // Definir Entrada
-    grid[1][1] = false; 
-    
-    // Definir Salida (Meta)
-    final exitR = rows - 2;
-    final exitC = cols - 2;
-    
-    grid[exitR][exitC] = false; 
-    
-    if (exitR - 1 > 0) grid[exitR - 1][exitC] = false; // Arriba
-    if (exitC - 1 > 0) grid[exitR][exitC - 1] = false; // Izquierda
-    
-    if (exitR - 1 > 0 && exitC - 1 > 0) grid[exitR - 1][exitC - 1] = false;
+    // 2. LÓGICA DE POSICIONES (JUGADOR Y META)
+    int sR, sC, gR, gC;
 
-    return Maze(rows, cols, combinedSeed, grid);
+    if (level < 5) {
+      // Niveles 1-4: Clásico (Inicio Arriba-Izq, Meta Abajo-Der)
+      sR = 1; sC = 1;
+      gR = rows - 2; gC = cols - 2;
+    } else {
+      // Nivel 5+: Invertir o rotar posiciones para aumentar dificultad
+      // Usamos el random seed para decidir la configuración de este subnivel
+      bool configA = random.nextBool();
+      
+      if (configA) {
+        // Invertido: Inicio Abajo-Der, Meta Arriba-Izq
+        sR = rows - 2; sC = cols - 2;
+        gR = 1; gC = 1;
+      } else {
+        // Cruzado: Inicio Abajo-Izq, Meta Arriba-Der
+        sR = rows - 2; sC = 1;
+        gR = 1; gC = cols - 2;
+      }
+    }
+
+    // 3. APLICAR Y LIMPIAR ZONAS
+    grid[sR][sC] = false; // Inicio
+    grid[gR][gC] = false; // Meta
+
+    // Helper para limpiar alrededor de un punto (sin romper perímetro)
+    void clearAround(int r, int c) {
+      if (r - 1 > 0) grid[r - 1][c] = false; 
+      if (r + 1 < rows - 1) grid[r + 1][c] = false; 
+      if (c - 1 > 0) grid[r][c - 1] = false; 
+      if (c + 1 < cols - 1) grid[r][c + 1] = false;
+    }
+
+    clearAround(gR, gC); // Limpiar meta
+    clearAround(sR, sC); // Limpiar inicio (para que el jugador no empiece atascado)
+
+    return Maze(rows, cols, combinedSeed, grid, sR, sC, gR, gC);
   }
 }

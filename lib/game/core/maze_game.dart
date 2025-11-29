@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:async'; // Para StreamSubscription
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
@@ -8,7 +7,8 @@ import 'package:flame/experimental.dart';
 import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sensors_plus/sensors_plus.dart'; // Acelerómetro
+import 'package:sensors_plus/sensors_plus.dart'; 
+import 'dart:async';
 
 import '../../models/game_config.dart';
 import '../components/player.dart';
@@ -32,7 +32,6 @@ with HasCollisionDetection, KeyboardEvents {
   
   List<List<bool>>? _collisionMap;
   
-  // Acelerómetro
   StreamSubscription<AccelerometerEvent>? _accelSubscription;
   Vector2 _tiltDirection = Vector2.zero();
 
@@ -50,22 +49,11 @@ with HasCollisionDetection, KeyboardEvents {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    // Iniciamos escucha de acelerómetro si está disponible
     if (config.isAccelerometerAvailable) {
       _accelSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
-        // Convertimos inclinación a dirección (-1 a 1)
-        // Ejes: X móvil = X juego (invertido a veces), Y móvil = Y juego
-        // Ajustar sensibilidad dividiendo por un factor (ej. 5.0)
         final double sensitivity = 2.0;
-        // x negativo es izquierda, positivo derecha
-        // y negativo es arriba (top), positivo abajo
         double x = -event.x / sensitivity; 
-        double y = event.y / sensitivity; // Depende de la orientación portrait/landscape
-        
-        // Si es Landscape (que suele ser el caso en juegos):
-        // x del acelerómetro es el eje corto, y el largo.
-        // Mejor dejarlo simple: en portrait, x es izquierda/derecha.
-        // Ajuste básico:
+        double y = event.y / sensitivity; 
         _tiltDirection = Vector2(x, y);
       });
     }
@@ -106,16 +94,17 @@ with HasCollisionDetection, KeyboardEvents {
     );
     add(mazeRenderer!);
 
-    final goalR = maze.rows - 2;
-    final goalC = maze.cols - 2;
+    // USAR POSICIONES DEL GENERADOR
     add(GoalComponent(
-      position: Vector2(goalC * wallSize + wallSize / 2, goalR * wallSize + wallSize / 2),
+      position: Vector2(maze.goalCol * wallSize + wallSize / 2, maze.goalRow * wallSize + wallSize / 2),
       size: Vector2.all(wallSize * 0.7), 
     ));
 
-    final startX = 1 * wallSize + wallSize / 2;
-    final startY = 1 * wallSize + wallSize / 2;
-    player = Player(position: Vector2(startX, startY), size: Vector2.all(wallSize * 0.5));
+    // USAR POSICIONES DEL GENERADOR
+    player = Player(
+      position: Vector2(maze.startCol * wallSize + wallSize / 2, maze.startRow * wallSize + wallSize / 2), 
+      size: Vector2.all(wallSize * 0.5)
+    );
     add(player);
 
     camera.setBounds(Rectangle.fromRect(
@@ -181,7 +170,6 @@ with HasCollisionDetection, KeyboardEvents {
   }
 
   void _updateControls() {
-    // Si es Touch, mostramos botones. Si es acelerómetro, los ocultamos.
     if (config.activeControl == ControlType.touchButtons && touchControls == null) {
       touchControls = TouchControlButtons(player);
       camera.viewport.add(touchControls!);
@@ -197,9 +185,7 @@ with HasCollisionDetection, KeyboardEvents {
     config.updateTime(dt);
     _updateControls();
     
-    // Acelerómetro Input
     if (config.activeControl == ControlType.accelerometer) {
-      // Zona muerta para estabilidad
       if (_tiltDirection.length > 0.2) {
         player.move(_tiltDirection);
       } else {
