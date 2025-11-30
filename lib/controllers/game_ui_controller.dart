@@ -45,6 +45,11 @@ class GameUIController {
 
   // Acción: Salir con Confirmación (Usado desde el menú de pausa)
   Future<void> exitToMenuWithConfirmation(BuildContext context) async {
+    // Pausar el juego si no está pausado
+    if (!game.paused) {
+      togglePause();
+    }
+
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (BuildContext ctx) {
@@ -85,9 +90,11 @@ class GameUIController {
 
   // Lógica interna de salida
   void _performExit(BuildContext context) {
-    // Aquí iría la lógica real de navegación, ej: Navigator.of(context).pushReplacementNamed('/');
-    // Por ahora solo imprimimos y cerramos diálogos si los hubiera
-    print("Saliendo al menú principal...");
-    // Navigator.of(context).popUntil((route) => route.isFirst); // Ejemplo
+    // Limpiar recursos si es necesario
+    game.pauseEngine(); // Asegurar que el motor esté detenido
+    
+    // Navegar de vuelta al Selector de Niveles (que ahora es la pantalla principal/home)
+    // Usamos popUntil para regresar a la primera ruta (que es LevelSelectorScreen)
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 }

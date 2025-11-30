@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/game_config.dart';
+import 'level_selector_screen.dart';
 
 class ConfigMenu extends StatelessWidget {
   const ConfigMenu({super.key});
@@ -12,22 +13,46 @@ class ConfigMenu extends StatelessWidget {
     final isMobileOS = defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
 
-    // Solo mostrar el botón de configuración en plataformas móviles o Web si se detecta control táctil.
-    if (!isMobileOS && config.activeControl == ControlType.keyboard) {
-      return Container();
-    }
-
     return Align(
       alignment: Alignment.topLeft,
       child: Padding(
         padding: const EdgeInsets.only(top: 100.0, left: 16.0),
-        child: FloatingActionButton(
-          mini: true,
-          backgroundColor: Colors.grey.shade800,
-          child: const Icon(Icons.settings, color: Colors.white),
-          onPressed: () {
-            _showControlSettings(context, config);
-          },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton(
+              heroTag: "btn_levels",
+              mini: true,
+              backgroundColor: Colors.grey.shade800,
+              child: const Icon(Icons.map, color: Colors.white),
+              onPressed: () async {
+                final selectedLevel = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LevelSelectorScreen(),
+                  ),
+                );
+                
+                if (selectedLevel != null && selectedLevel is int) {
+                  // Aquí se podría añadir lógica para cargar el nivel seleccionado
+                  config.currentLevel = selectedLevel;
+                  config.currentSubMaze = 1; // Resetear sub-nivel al cambiar de nivel principal
+                  // Reiniciar el juego sería necesario, pero eso depende de GameUIController
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+            if (isMobileOS || config.activeControl != ControlType.keyboard)
+              FloatingActionButton(
+                heroTag: "btn_settings",
+                mini: true,
+                backgroundColor: Colors.grey.shade800,
+                child: const Icon(Icons.settings, color: Colors.white),
+                onPressed: () {
+                  _showControlSettings(context, config);
+                },
+              ),
+          ],
         ),
       ),
     );

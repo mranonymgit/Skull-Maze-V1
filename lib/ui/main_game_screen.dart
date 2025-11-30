@@ -105,7 +105,6 @@ class _MainGameScreenState extends State<MainGameScreen> {
 
                 const Spacer(),
                 const Divider(color: Colors.white24),
-                // Botón salir con confirmación en desktop
                 _buildMenuButton(Icons.exit_to_app, 'Salir al Menú', () => _controller.exitToMenuWithConfirmation(context), color: Colors.redAccent),
               ],
             ),
@@ -195,6 +194,8 @@ class _MainGameScreenState extends State<MainGameScreen> {
             },
           ),
         ),
+        
+        // Botón de Pausa (Izquierda)
         Positioned(
           top: 10, left: 10,
           child: SafeArea(
@@ -211,38 +212,49 @@ class _MainGameScreenState extends State<MainGameScreen> {
             ),
           ),
         ),
+        
+        // HUD UNIFICADO (Centro Superior) - Tiempo y Nivel
         Positioned(
-          top: 10, left: 0, right: 0,
+          top: 10, left: 60, right: 10, // Margen a la izquierda para no tapar el botón de pausa
           child: SafeArea(
-            child: Center(
-              child: Consumer<GameConfig>(
-                builder: (context, config, _) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.5))),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.timer, color: Colors.greenAccent, size: 16),
-                      const SizedBox(width: 8),
-                      Text(config.timeRemaining.toStringAsFixed(1), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-                    ],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center, // Centrado
+              children: [
+                // Cápsula de Información
+                Consumer<GameConfig>(
+                  builder: (context, config, _) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.cyan.withValues(alpha: 0.5)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Tiempo
+                        const Icon(Icons.timer, color: Colors.greenAccent, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          config.timeRemaining.toStringAsFixed(1),
+                          style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        
+                        // Separador
+                        Container(height: 16, width: 1, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 12)),
+                        
+                        // Nivel
+                        const Icon(Icons.layers, color: Colors.cyan, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          'NV ${config.currentLevel} - ${config.currentSubMaze}/${config.maxSubMazes}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 20, left: 0, right: 0,
-          child: SafeArea(
-            child: Center(
-              child: Consumer<GameConfig>(
-                builder: (context, config, _) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.cyan.withValues(alpha: 0.5))),
-                  child: Text('NIVEL ${config.currentLevel}  •  SUB ${config.currentSubMaze}/${config.maxSubMazes}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                ),
-              ),
+              ],
             ),
           ),
         ),

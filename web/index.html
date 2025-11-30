@@ -33,6 +33,26 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!-- Firebase Configuration -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAnXLlclG8PebrRShdV__hjJZEqunwaPcA",
+      authDomain: "skull-maze-v1.firebaseapp.com",
+      projectId: "skull-maze-v1",
+      storageBucket: "skull-maze-v1.firebasestorage.app",
+      messagingSenderId: "152736849158",
+      appId: "1:152736849158:web:3f099ad75c458f4d451287",
+      measurementId: "G-0156HH29FS"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

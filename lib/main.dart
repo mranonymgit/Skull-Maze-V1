@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'models/game_config.dart';
-import 'ui/main_game_screen.dart';
+import 'ui/level_selector_screen.dart';
+import 'firebase_options.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Intentar inicializar Firebase si está disponible, sino continuar (para evitar crashes si no está configurado aún)
+  try {
+     // Si firebase_options.dart existiera, usaríamos: await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+     // Por ahora, usamos la inicialización automática para Android (si google-services.json está bien)
+     await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint("Firebase no inicializado o error: $e");
+  }
+
   runApp(
     ChangeNotifierProvider(
       create: (context) => GameConfig(),
@@ -21,11 +32,12 @@ class MazeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Skull Maze',
-      debugShowCheckedModeBanner: false, // Quitar etiqueta DEBUG
+      debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: Colors.black,
       ),
-      home: const MainGameScreen(),
+      // La pantalla inicial ahora es el Selector de Niveles
+      home: const LevelSelectorScreen(),
     );
   }
 }

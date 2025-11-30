@@ -4,13 +4,15 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flame/experimental.dart';
+import 'package:flame_audio/flame_audio.dart'; 
 import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart'; 
-import 'dart:async';
+import 'dart:async' as async; // Aliased to avoid conflict with Flame's Timer
 
 import '../../models/game_config.dart';
+import '../../controllers/game_ui_controller.dart';
 import '../components/player.dart';
 import '../components/wall.dart'; 
 import '../components/maze_render_component.dart'; 
@@ -32,8 +34,13 @@ with HasCollisionDetection, KeyboardEvents {
   
   List<List<bool>>? _collisionMap;
   
-  StreamSubscription<AccelerometerEvent>? _accelSubscription;
+  async.StreamSubscription<AccelerometerEvent>? _accelSubscription;
   Vector2 _tiltDirection = Vector2.zero();
+
+  // Variable para controlar si la música ya se inició
+  bool _musicStarted = false;
+  // BGM filename
+  static const String bgmFile = 'fondo.mp3';
 
   @override
   Color backgroundColor() => const Color(0xFF000000);
@@ -49,6 +56,10 @@ with HasCollisionDetection, KeyboardEvents {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    
+    // Inicializar audio
+    FlameAudio.bgm.initialize();
+
     if (config.isAccelerometerAvailable) {
       _accelSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
         final double sensitivity = 2.0;
@@ -62,7 +73,64 @@ with HasCollisionDetection, KeyboardEvents {
   @override
   void onRemove() {
     _accelSubscription?.cancel();
+    _stopBackgroundMusic(); // Detener música al salir
     super.onRemove();
+  }
+
+  // Método para iniciar música con fade in
+  void _startBackgroundMusic() {
+    if (!_musicStarted) {
+      _musicStarted = true;
+      // Reproducir en loop
+      FlameAudio.bgm.play(bgmFile, volume: 0); 
+      
+      // Fade in manual
+      double targetVolume = config.volume;
+      double currentVol = 0;
+      const fadeDuration = Duration(seconds: 2);
+      const steps = 20;
+      final stepTime = Duration(milliseconds: fadeDuration.inMilliseconds ~/ steps);
+      final volStep = targetVolume / steps;
+
+      async.Timer.periodic(stepTime, (timer) {
+        currentVol += volStep;
+        if (currentVol >= targetVolume) {
+          currentVol = targetVolume;
+          timer.cancel();
+        }
+        // Solo ajustar si la música sigue sonando
+        if (_musicStarted) {
+          FlameAudio.bgm.audioPlayer.setVolume(currentVol);
+        } else {
+          timer.cancel();
+        }
+      });
+    }
+  }
+
+  void _stopBackgroundMusic() async {
+    if (_musicStarted) {
+      _musicStarted = false;
+      
+      // Fade out
+      double currentVol = config.volume; 
+      
+      const fadeDuration = Duration(seconds: 2);
+      const steps = 20;
+      final stepTime = Duration(milliseconds: fadeDuration.inMilliseconds ~/ steps);
+      final volStep = currentVol / steps;
+
+      async.Timer.periodic(stepTime, (timer) async {
+        currentVol -= volStep;
+        if (currentVol <= 0) {
+          currentVol = 0;
+          timer.cancel();
+          await FlameAudio.bgm.stop();
+        } else {
+           FlameAudio.bgm.audioPlayer.setVolume(currentVol);
+        }
+      });
+    }
   }
 
   @override
@@ -72,6 +140,11 @@ with HasCollisionDetection, KeyboardEvents {
   }
 
   void loadMaze(int level, int subMazeIndex) {
+    // Iniciar música si es la primera vez que cargamos un nivel
+    if (!_musicStarted) {
+      _startBackgroundMusic();
+    }
+
     children.whereType<WallComponent>().toList().forEach(remove);
     children.whereType<MazeRenderComponent>().toList().forEach(remove);
     children.whereType<GoalComponent>().toList().forEach(remove);
@@ -136,7 +209,7 @@ with HasCollisionDetection, KeyboardEvents {
   }
 
   void nextLevel() {
-    config.advanceMaze(); 
+    config.advanceMaze();
     loadMaze(config.currentLevel, config.currentSubMaze);
     overlays.remove('LevelCompleteMenu');
     paused = false;
@@ -185,6 +258,11 @@ with HasCollisionDetection, KeyboardEvents {
     config.updateTime(dt);
     _updateControls();
     
+    // Actualizar volumen en tiempo real
+    if (_musicStarted) {
+       FlameAudio.bgm.audioPlayer.setVolume(config.volume);
+    }
+
     if (config.activeControl == ControlType.accelerometer) {
       if (_tiltDirection.length > 0.2) {
         player.move(_tiltDirection);
