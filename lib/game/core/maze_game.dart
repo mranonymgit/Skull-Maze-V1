@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:io';
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
@@ -9,7 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart'; 
-import 'dart:async' as async; // Aliased to avoid conflict with Flame's Timer
+import 'dart:async' as async; 
 
 import '../../models/game_config.dart';
 import '../../controllers/game_ui_controller.dart';
@@ -37,10 +38,8 @@ with HasCollisionDetection, KeyboardEvents {
   async.StreamSubscription<AccelerometerEvent>? _accelSubscription;
   Vector2 _tiltDirection = Vector2.zero();
 
-  // Variable para controlar si la música ya se inició
   bool _musicStarted = false;
-  // BGM filename
-  static const String bgmFile = 'fondo.mp3';
+  static const String bgmLevelFile = 'level.mp3';
 
   @override
   Color backgroundColor() => const Color(0xFF000000);
@@ -56,8 +55,6 @@ with HasCollisionDetection, KeyboardEvents {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    
-    // Inicializar audio
     FlameAudio.bgm.initialize();
 
     if (config.isAccelerometerAvailable) {
@@ -73,77 +70,49 @@ with HasCollisionDetection, KeyboardEvents {
   @override
   void onRemove() {
     _accelSubscription?.cancel();
-    _stopBackgroundMusic(); // Detener música al salir
+    _stopBackgroundMusic(); 
     super.onRemove();
   }
+  
+  @override
+  void pauseEngine() {
+    super.pauseEngine();
+    if (_musicStarted) {
+      FlameAudio.bgm.pause();
+    }
+  }
 
-  // Método para iniciar música con fade in
-  void _startBackgroundMusic() {
+  @override
+  void resumeEngine() {
+    super.resumeEngine();
+    if (_musicStarted) {
+      FlameAudio.bgm.resume();
+    }
+  }
+
+  void _startLevelMusic() {
     if (!_musicStarted) {
-      _musicStarted = true;
-      // Reproducir en loop
-      FlameAudio.bgm.play(bgmFile, volume: 0); 
-      
-      // Fade in manual
-      double targetVolume = config.volume;
-      double currentVol = 0;
-      const fadeDuration = Duration(seconds: 2);
-      const steps = 20;
-      final stepTime = Duration(milliseconds: fadeDuration.inMilliseconds ~/ steps);
-      final volStep = targetVolume / steps;
-
-      async.Timer.periodic(stepTime, (timer) {
-        currentVol += volStep;
-        if (currentVol >= targetVolume) {
-          currentVol = targetVolume;
-          timer.cancel();
-        }
-        // Solo ajustar si la música sigue sonando
-        if (_musicStarted) {
-          FlameAudio.bgm.audioPlayer.setVolume(currentVol);
-        } else {
-          timer.cancel();
-        }
-      });
+        _musicStarted = true;
+        FlameAudio.bgm.play(bgmLevelFile, volume: config.volume);
     }
   }
 
   void _stopBackgroundMusic() async {
     if (_musicStarted) {
       _musicStarted = false;
-      
-      // Fade out
-      double currentVol = config.volume; 
-      
-      const fadeDuration = Duration(seconds: 2);
-      const steps = 20;
-      final stepTime = Duration(milliseconds: fadeDuration.inMilliseconds ~/ steps);
-      final volStep = currentVol / steps;
-
-      async.Timer.periodic(stepTime, (timer) async {
-        currentVol -= volStep;
-        if (currentVol <= 0) {
-          currentVol = 0;
-          timer.cancel();
-          await FlameAudio.bgm.stop();
-        } else {
-           FlameAudio.bgm.audioPlayer.setVolume(currentVol);
-        }
-      });
+      await FlameAudio.bgm.stop();
     }
   }
 
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
+    // Actualizar la cámara dinámicamente si cambia el tamaño de la ventana (Web/Desktop)
     _updateCameraZoom(size);
   }
 
   void loadMaze(int level, int subMazeIndex) {
-    // Iniciar música si es la primera vez que cargamos un nivel
-    if (!_musicStarted) {
-      _startBackgroundMusic();
-    }
+    _startLevelMusic();
 
     children.whereType<WallComponent>().toList().forEach(remove);
     children.whereType<MazeRenderComponent>().toList().forEach(remove);
@@ -167,29 +136,80 @@ with HasCollisionDetection, KeyboardEvents {
     );
     add(mazeRenderer!);
 
-    // USAR POSICIONES DEL GENERADOR
     add(GoalComponent(
       position: Vector2(maze.goalCol * wallSize + wallSize / 2, maze.goalRow * wallSize + wallSize / 2),
       size: Vector2.all(wallSize * 0.7), 
     ));
 
-    // USAR POSICIONES DEL GENERADOR
     player = Player(
       position: Vector2(maze.startCol * wallSize + wallSize / 2, maze.startRow * wallSize + wallSize / 2), 
-      size: Vector2.all(wallSize * 0.5)
+      size: Vector2.all(wallSize * 0.7) 
     );
     add(player);
 
+    // Límites físicos de la cámara para que no se salga del laberinto
     camera.setBounds(Rectangle.fromRect(
       Rect.fromLTWH(0, 0, _mazeCols * wallSize, _mazeRows * wallSize)
     ));
     
+    // Configuración inicial de la cámara
     _updateCameraZoom(canvasSize);
 
     _updateControls();
     
     overlays.remove('LevelCompleteMenu');
     paused = false;
+  }
+  
+  // --- LÓGICA CENTRALIZADA E INTELIGENTE DE CÁMARA ---
+  void _updateCameraZoom(Vector2 screenSize) {
+    if (_mazeCols == 0 || _mazeRows == 0 || screenSize.x == 0 || screenSize.y == 0) return;
+    
+    // Detectar Móvil (Android o iOS)
+    bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    
+    // Calcular zoom para "Fit" (Ver todo)
+    final double mapWidth = _mazeCols * wallSize;
+    final double mapHeight = _mazeRows * wallSize;
+    final double scaleX = screenSize.x / mapWidth;
+    final double scaleY = screenSize.y / mapHeight;
+    double zoomFit = min(scaleX, scaleY) * 0.95; // 95% para margen
+
+    // Decidir modo de cámara:
+    // Nivel 1: Intentar mostrar todo siempre (Tutorial) a menos que sea imposible de ver.
+    // Nivel 2+:
+    //   - Móvil: SIEMPRE Follow (Mejor jugabilidad táctil).
+    //   - Web/Desktop: Depende del tamaño. Si zoomFit es muy chico (< 0.7), Follow. Si no, Fit.
+    
+    bool useFollowMode = false;
+
+    if (config.currentLevel >= 2) {
+      if (isMobile) {
+        useFollowMode = true;
+      } else if (zoomFit < 0.7) { 
+        // Pantalla pequeña en Web/Desktop: Usar Follow para no ver hormigas
+        useFollowMode = true;
+      }
+    } else {
+      // Nivel 1: Solo follow si es ilegible (zoomFit extremadamente bajo)
+      if (zoomFit < 0.4) useFollowMode = true; 
+    }
+
+    if (useFollowMode) {
+       // MODO SEGUIMIENTO
+       if (!camera.isFollowing) {
+         camera.follow(player);
+       }
+       // Zoom constante y cómodo para ver detalles y caminos cercanos
+       camera.viewfinder.zoom = 1.5; 
+       camera.viewfinder.anchor = Anchor.center;
+    } else {
+       // MODO VISTA COMPLETA
+       camera.stop(); // Dejar de seguir
+       camera.viewfinder.zoom = zoomFit;
+       camera.viewfinder.anchor = Anchor.center;
+       camera.viewfinder.position = Vector2(mapWidth / 2, mapHeight / 2);
+    }
   }
   
   bool isWallAt(int row, int col) {
@@ -214,33 +234,6 @@ with HasCollisionDetection, KeyboardEvents {
     overlays.remove('LevelCompleteMenu');
     paused = false;
   }
-  
-  void goToMainMenu() {
-     overlays.remove('LevelCompleteMenu');
-  }
-
-  void _updateCameraZoom(Vector2 screenSize) {
-    if (_mazeCols == 0 || _mazeRows == 0) return;
-    
-    final double mapWidth = _mazeCols * wallSize;
-    final double mapHeight = _mazeRows * wallSize;
-    final double scaleX = screenSize.x / mapWidth;
-    final double scaleY = screenSize.y / mapHeight;
-    
-    bool isMobile = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
-    double marginFactor = isMobile ? 0.90 : 0.95;
-
-    double zoomFit = min(scaleX, scaleY) * marginFactor; 
-
-    camera.viewfinder.zoom = zoomFit;
-    camera.viewfinder.anchor = Anchor.center;
-    
-    final centerX = mapWidth / 2;
-    final centerY = mapHeight / 2;
-    camera.viewfinder.position = Vector2(centerX, centerY);
-    
-    camera.stop();
-  }
 
   void _updateControls() {
     if (config.activeControl == ControlType.touchButtons && touchControls == null) {
@@ -258,7 +251,6 @@ with HasCollisionDetection, KeyboardEvents {
     config.updateTime(dt);
     _updateControls();
     
-    // Actualizar volumen en tiempo real
     if (_musicStarted) {
        FlameAudio.bgm.audioPlayer.setVolume(config.volume);
     }

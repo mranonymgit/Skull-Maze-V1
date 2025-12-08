@@ -1,4 +1,5 @@
 import 'package:flame/game.dart';
+import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import '../game/core/maze_game.dart';
 import '../models/game_config.dart';
 import '../controllers/game_ui_controller.dart';
 import 'level_complete_menu.dart';
+import 'hud_widget.dart'; // Importar el HUD
 
 class MainGameScreen extends StatefulWidget {
   const MainGameScreen({super.key});
@@ -36,6 +38,16 @@ class _MainGameScreenState extends State<MainGameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Escuchar cambios de volumen para actualizar la música del nivel en tiempo real
+    final config = context.watch<GameConfig>();
+    try {
+       if (FlameAudio.bgm.isPlaying) {
+          FlameAudio.bgm.audioPlayer.setVolume(config.volume);
+       }
+    } catch (e) {
+       // Ignore errors
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF121212), 
       body: LayoutBuilder(
@@ -117,13 +129,18 @@ class _MainGameScreenState extends State<MainGameScreen> {
             color: Colors.black,
             padding: const EdgeInsets.all(10), 
             child: ClipRect( 
-              child: GameWidget(
-                game: _game,
-                overlayBuilderMap: {
-                  'LevelCompleteMenu': (BuildContext context, MazeGame game) {
-                    return LevelCompleteMenu(game: game);
-                  },
-                },
+              child: Stack(
+                children: [
+                  GameWidget(
+                    game: _game,
+                    overlayBuilderMap: {
+                      'LevelCompleteMenu': (BuildContext context, MazeGame game) {
+                        return LevelCompleteMenu(game: game);
+                      },
+                    },
+                  ),
+                  // Eliminado HUDWidget de aquí para versión Desktop/Web grande
+                ],
               ),
             ),
           ),
@@ -141,15 +158,20 @@ class _MainGameScreenState extends State<MainGameScreen> {
               const SizedBox(height: 30),
               
               Consumer<GameConfig>(
-                builder: (context, config, _) => Column(
-                  children: [
-                    _buildStatCard('NIVEL', '${config.currentLevel}', Icons.layers),
-                    const SizedBox(height: 15),
-                    _buildStatCard('SUB-NIVEL', '${config.currentSubMaze} / ${config.maxSubMazes}', Icons.grid_4x4),
-                    const SizedBox(height: 15),
-                    _buildStatCard('TIEMPO', config.timeRemaining.toStringAsFixed(1), Icons.timer, valueColor: Colors.greenAccent),
-                  ],
-                ),
+                builder: (context, config, _) {
+                  // Lógica de color para el tiempo en Desktop
+                  Color timeColor = config.timeRemaining <= 10 ? Colors.redAccent : Colors.greenAccent;
+                  
+                  return Column(
+                    children: [
+                      _buildStatCard('NIVEL', '${config.currentLevel}', Icons.layers),
+                      const SizedBox(height: 15),
+                      _buildStatCard('SUB-NIVEL', '${config.currentSubMaze} / ${config.maxSubMazes}', Icons.grid_4x4),
+                      const SizedBox(height: 15),
+                      _buildStatCard('TIEMPO', config.timeRemaining.toStringAsFixed(1), Icons.timer, valueColor: timeColor),
+                    ],
+                  );
+                },
               ),
               
               const SizedBox(height: 40),
@@ -195,6 +217,9 @@ class _MainGameScreenState extends State<MainGameScreen> {
           ),
         ),
         
+        // HUD UNIFICADO (Centro Superior) - Usando HUDWidget
+        const HUDWidget(),
+
         // Botón de Pausa (Izquierda)
         Positioned(
           top: 10, left: 10,
@@ -209,52 +234,6 @@ class _MainGameScreenState extends State<MainGameScreen> {
                 ),
                 onPressed: () => _showMobilePauseMenu(context),
               ),
-            ),
-          ),
-        ),
-        
-        // HUD UNIFICADO (Centro Superior) - Tiempo y Nivel
-        Positioned(
-          top: 10, left: 60, right: 10, // Margen a la izquierda para no tapar el botón de pausa
-          child: SafeArea(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center, // Centrado
-              children: [
-                // Cápsula de Información
-                Consumer<GameConfig>(
-                  builder: (context, config, _) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.cyan.withValues(alpha: 0.5)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Tiempo
-                        const Icon(Icons.timer, color: Colors.greenAccent, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          config.timeRemaining.toStringAsFixed(1),
-                          style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                        
-                        // Separador
-                        Container(height: 16, width: 1, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 12)),
-                        
-                        // Nivel
-                        const Icon(Icons.layers, color: Colors.cyan, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          'NV ${config.currentLevel} - ${config.currentSubMaze}/${config.maxSubMazes}',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ),
@@ -305,7 +284,11 @@ class _MainGameScreenState extends State<MainGameScreen> {
                         child: Slider(
                           value: config.volume,
                           activeColor: Colors.cyan,
-                          onChanged: _controller.updateVolume,
+                          onChanged: (val) {
+                             // Actualizar volumen del config, esto desencadenará la actualización en MainGameScreen (build)
+                             // y MazeGame (update) para ajustar la música en tiempo real
+                             _controller.updateVolume(val);
+                          },
                         ),
                       ),
                       SizedBox(width: 35, child: Text('${(config.volume * 100).round()}%', style: const TextStyle(color: Colors.white70, fontSize: 12), textAlign: TextAlign.end)),

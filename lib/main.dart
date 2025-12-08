@@ -3,16 +3,20 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'models/game_config.dart';
-import 'ui/level_selector_screen.dart';
+import 'ui/login_screen.dart'; 
 import 'firebase_options.dart';
+import 'services/notification_service.dart'; // Importar el servicio
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Intentar inicializar Firebase si está disponible, sino continuar (para evitar crashes si no está configurado aún)
   try {
-     // Si firebase_options.dart existiera, usaríamos: await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-     // Por ahora, usamos la inicialización automática para Android (si google-services.json está bien)
-     await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    
+    // Inicializar servicio de notificaciones
+    await NotificationService().init();
+
   } catch (e) {
     debugPrint("Firebase no inicializado o error: $e");
   }
@@ -36,8 +40,7 @@ class MazeApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: Colors.black,
       ),
-      // La pantalla inicial ahora es el Selector de Niveles
-      home: const LevelSelectorScreen(),
+      home: const LoginScreen(),
     );
   }
 }

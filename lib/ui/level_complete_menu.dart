@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../game/core/maze_game.dart';
+import '../controllers/game_ui_controller.dart';
+import 'package:provider/provider.dart';
+import '../models/game_config.dart';
 
 class LevelCompleteMenu extends StatefulWidget {
   final MazeGame game;
@@ -17,13 +20,11 @@ class _LevelCompleteMenuState extends State<LevelCompleteMenu> with SingleTicker
   @override
   void initState() {
     super.initState();
-    // Animación fluida de "Pop" (Escala)
     _controller = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
 
-    // Usamos ElasticOut para un efecto de rebote sutil y profesional
     _scaleAnimation = CurvedAnimation(
       parent: _controller,
       curve: Curves.elasticOut,
@@ -40,6 +41,8 @@ class _LevelCompleteMenuState extends State<LevelCompleteMenu> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    final config = context.read<GameConfig>();
+    
     return Center(
       child: ScaleTransition(
         scale: _scaleAnimation,
@@ -47,12 +50,12 @@ class _LevelCompleteMenuState extends State<LevelCompleteMenu> with SingleTicker
           width: 320,
           padding: const EdgeInsets.all(25),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.9),
-            border: Border.all(color: const Color(0xFF00FFFF), width: 3), // Borde Neon Cyan
+            color: Colors.black.withOpacity(0.9), // Corrección para compatibilidad
+            border: Border.all(color: const Color(0xFF00FFFF), width: 3), 
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF00FFFF).withValues(alpha: 0.3),
+                color: const Color(0xFF00FFFF).withOpacity(0.3), // Corrección para compatibilidad
                 blurRadius: 20,
                 spreadRadius: 5,
               )
@@ -93,9 +96,21 @@ class _LevelCompleteMenuState extends State<LevelCompleteMenu> with SingleTicker
               ),
               const SizedBox(height: 15),
               
-              // Botón Volver (Sin confirmación, directo)
+              // Botón Volver al Menú
               TextButton(
-                onPressed: () => widget.game.goToMainMenu(),
+                onPressed: () {
+                  // En móviles, a veces el Navigator.pop no funciona si el contexto no es el correcto
+                  // o si Flame maneja los overlays de forma especial.
+                  // Intentamos cerrar el overlay primero, y si no, salir de la pantalla.
+                  
+                  try {
+                    // 1. Intentar salir de la pantalla (cerrar MainGameScreen)
+                    Navigator.of(context, rootNavigator: true).pop(); 
+                  } catch (e) {
+                    // Fallback si falla el pop
+                    debugPrint("Error al salir al menú: $e");
+                  }
+                },
                 style: TextButton.styleFrom(foregroundColor: Colors.white70),
                 child: const Text('Volver al Menú'),
               ),

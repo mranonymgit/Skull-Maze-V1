@@ -9,15 +9,19 @@ import '../core/maze_game.dart';
 import 'wall.dart';
 import 'goal.dart';
 
-class Player extends CircleComponent
+class Player extends PositionComponent
     with HasGameReference<MazeGame>, CollisionCallbacks {
   
   // === VELOCIDAD ADAPTATIVA ===
-  static double get baseSpeed => kIsWeb ? 170.0 : 220.0;
+  // Se incrementa la velocidad base para mayor fluidez
+  static double get baseSpeed => kIsWeb ? 240.0 : 300.0; 
   
   Vector2 direction = Vector2.zero(); 
   bool goalReached = false;
   Vector2 _previousPosition = Vector2.zero();
+  
+  final Paint _paint = Paint()..color = const Color(0xFF18FFFF);
+  SpriteComponent? _spriteComponent;
 
   Player({
     required super.position,
@@ -30,11 +34,35 @@ class Player extends CircleComponent
   @override
   Future<void> onLoad() async {
     super.onLoad();
-    paint = Paint()..color = const Color(0xFF18FFFF); 
     
-    // MEJORA: Hitbox un poco más grande (95%) para evitar que el sprite visual corte esquinas
+    // Cargar sprite del personaje seleccionado
+    final charName = game.config.selectedCharacter;
+    // Asumimos que el nombre en config (ej: "Catty") coincide con el archivo (ej: "Catty.png")
+    
+    try {
+      final spritePath = 'Personajes/$charName.png';
+      Sprite? sprite;
+      String fullPath = spritePath;
+      if (charName == 'Sora' || charName == 'Ury') {
+         fullPath = 'Personajes/$charName.jpeg';
+      }
+      
+      sprite = await game.loadSprite(fullPath);
+      
+      _spriteComponent = SpriteComponent(
+        sprite: sprite,
+        size: size,
+        anchor: Anchor.center,
+        position: size / 2, 
+      );
+      add(_spriteComponent!);
+      
+    } catch (e) {
+      debugPrint("Error cargando sprite del personaje: $e");
+    }
+    
     add(CircleHitbox(
-      radius: size.x / 2 * 0.95, 
+      radius: size.x / 2 * 0.9, // Reducido ligeramente hitbox para evitar atascos en esquinas
       anchor: Anchor.center,
       position: size / 2,
       collisionType: CollisionType.active,
@@ -45,11 +73,17 @@ class Player extends CircleComponent
 
   @override
   void update(double dt) {
-    super.update(dt);
+    // --- SUAVIZADO DE MOVIMIENTO (INTERPOLACIÓN) ---
+    // Si el dt es muy alto (lag spike), lo limitamos para no "teletransportar" al jugador
+    // a través de paredes. Si dt es muy bajo (altos Hz), el movimiento es suave.
+    double safeDt = dt.clamp(0.0, 0.05); 
+    
+    super.update(safeDt);
 
     if (goalReached || direction == Vector2.zero()) return;
 
-    final velocity = direction.normalized() * baseSpeed * dt;
+    // Calculamos velocidad
+    final velocity = direction.normalized() * baseSpeed * safeDt;
     
     _moveWithCollisions(velocity);
   }
@@ -60,16 +94,12 @@ class Player extends CircleComponent
 
   // OPTIMIZACIÓN O(1) + RESOLUCIÓN MULTI-PASADA (Anti-Tunneling)
   void _moveWithCollisions(Vector2 delta) {
-    // Posición propuesta inicial
     Vector2 currentPos = position + delta;
     
-    // BUCLE DE RESOLUCIÓN ITERATIVA
-    // Realizamos varias pasadas (3) para resolver conflictos complejos (ej. esquinas internas)
-    // Si resolvemos pared A y nos empuja contra pared B, la siguiente pasada resolverá pared B.
-    for (int i = 0; i < 3; i++) {
+    // Aumentamos pasadas para mayor precisión a alta velocidad
+    for (int i = 0; i < 4; i++) { 
       bool collisionFound = false;
 
-      // Calculamos celda actual basada en la posición corregida de esta iteración
       int gridCol = (currentPos.x / MazeGame.wallSize).floor();
       int gridRow = (currentPos.y / MazeGame.wallSize).floor();
 
@@ -83,7 +113,6 @@ class Player extends CircleComponent
             double wSize = MazeGame.wallSize;
             
             if (_willCollideWithRect(currentPos, wx, wy, wSize, wSize)) {
-              // Resolvemos y actualizamos currentPos inmediatamente para la siguiente verificación
               currentPos = _resolveCollisionWithRect(currentPos, wx, wy, wSize, wSize);
               collisionFound = true;
             }
@@ -91,11 +120,9 @@ class Player extends CircleComponent
         }
       }
       
-      // Si en una pasada no hubo colisiones, terminamos antes (optimización)
       if (!collisionFound) break;
     }
 
-    // Aplicamos la posición final libre de colisiones
     position = currentPos;
     _previousPosition = position.clone();
   }
@@ -128,7 +155,7 @@ class Player extends CircleComponent
     double wallRight = wx + wWidth;
     double wallTop = wy;
     double wallBottom = wy + wHeight;
-    double playerRadius = size.x / 2 * 0.95; // Usar el mismo radio ajustado
+    double playerRadius = size.x / 2 * 0.9; 
 
     double closestX = newPosition.x.clamp(wallLeft, wallRight);
     double closestY = newPosition.y.clamp(wallTop, wallBottom);
@@ -158,7 +185,7 @@ class Player extends CircleComponent
     double wallRight = wx + wWidth;
     double wallTop = wy;
     double wallBottom = wy + wHeight;
-    double playerRadius = size.x / 2 * 0.95; // Radio consistente
+    double playerRadius = size.x / 2 * 0.9; 
 
     double closestX = newPosition.x.clamp(wallLeft, wallRight);
     double closestY = newPosition.y.clamp(wallTop, wallBottom);
@@ -181,6 +208,8 @@ class Player extends CircleComponent
   
   @override
   void render(Canvas canvas) {
-     canvas.drawCircle(Offset(size.x/2, size.y/2), size.x/2, paint);
+     if (_spriteComponent == null) {
+       canvas.drawCircle(Offset(size.x/2, size.y/2), size.x/2, _paint);
+     }
   }
 }
